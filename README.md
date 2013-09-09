@@ -7,25 +7,25 @@ Features
 --------
 
 * Monitoring
-  * Aggregated health derived from one or more component monitors.
-  * Ability to restrict the impact on overall health contributed by individual monitors.
-  * Standard monitors for common sub-components:
-    * External services
-    * Free memory
-    * Free disk
-  * Ability to control overall health via JMX (for upgrade situations).
-  * Passive and active monitoring styles supported.
-  * Listener hooks to enable triggering other logic from changes in health state.
-  * Nagios plugin to expose overall and component health details.
+	* Aggregated health derived from one or more component monitors.
+	* Ability to restrict the impact on overall health contributed by individual monitors.
+	* Standard monitors for common sub-components:
+		* External services
+		* Free memory
+		* Free disk
+	* Ability to control overall health via JMX (for upgrade situations).
+	* Passive and active monitoring styles supported.
+	* Listener hooks to enable triggering other logic from changes in health state.
+	* Nagios plugin to expose overall and component health details.
 * KPI
-  * Annotation-driven collection of key performance indicators on public methods
-  * API to enable custom integration of KPIs
-  * Distinction between successful and unsuccessful transactions.
-  * Exposure of statistics via JMX for ease of integration with tools such as OpenTSDB.
-  * Integration with StatsE for streaming to Heka
+	* Annotation-driven collection of key performance indicators on public methods
+	* API to enable custom integration of KPIs
+	* Distinction between successful and unsuccessful transactions.
+	* Exposure of statistics via JMX for ease of integration with tools such as OpenTSDB.
+	* Integration with StatsE for streaming to Heka
 * Web app overlay
-  * Provides web interface for viewing detailed health status
-  * Provides batch interface for querying JMX beans over HTTP (used by Nagios plugin)
+	* Provides web interface for viewing detailed health status
+	* Provides batch interface for querying JMX beans over HTTP (used by Nagios plugin)
 
 Licensing
 ---------
