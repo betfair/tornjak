@@ -17,7 +17,7 @@ Features
 	* Passive and active monitoring styles supported.
 	* Listener hooks to enable triggering other logic from changes in health state.
 	* Nagios plugin to expose overall and component health details.
-* KPI
+* Key performance indicators
 	* Annotation-driven collection of key performance indicators on public methods
 	* API to enable custom integration of KPIs
 	* Distinction between successful and unsuccessful transactions.
@@ -26,6 +26,9 @@ Features
 * Web app overlay
 	* Provides web interface for viewing detailed health status
 	* Provides batch interface for querying JMX beans over HTTP (used by Nagios plugin)
+* Nagios plugin
+	* Plugin capabilities for reading overall health
+	* Can also expose sub-component health status
 
 Licensing
 ---------
