@@ -1,7 +1,7 @@
-tonjak
+tornjak
 ======
 
-Welcome to Tonjak, supporting derivation and exposure of both performance and health monitoring, typically for use within back-end services.
+Welcome to Tornjak, supporting derivation and exposure of both performance and health monitoring, typically for use within back-end services.
 
 Features
 --------
@@ -33,7 +33,7 @@ Features
 Licensing
 ---------
 
-Cougar is covered by "[The Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0.html)":
+Tornjak is covered by "[The Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0.html)":
 
     Copyright 2013, The Sporting Exchange Limited
     
