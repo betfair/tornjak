@@ -1,0 +1,426 @@
+#!/bin/bash
+#
+# Copyright 2013, The Sporting Exchange Limited
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+RUN_DIR=`dirname $0`
+TEST_SUPPORT_HOME=$RUN_DIR/testsupport
+SRC_DIR=../../main/shell
+OLD_PATH=$PATH
+SOUT=/tmp/sout.$$
+SERR=/tmp/serr.$$
+
+run_check() {
+  $SRC_DIR/check_service_dependency $* >$SOUT 2>$SERR
+  return $?
+}
+
+get_line_from_file() {
+  cat $1 | tail --lines=+$2 | head -1
+}
+
+command_wget() {
+  echo $* >> $TEST_SUPPORT_HOME/wget.commands
+}
+
+expect_wget() {
+  echo $* >> $TEST_SUPPORT_HOME/wget.expects
+}
+
+assert_no_wget_commands_outstanding() {
+  wget_check_no_commands
+  EXIT_CODE=$?
+  if [[ ! $EXIT_CODE ]]; then
+    cat $TEST_SUPPORT_HOME/wget.commands
+  fi
+  ${_ASSERT_EQUALS_} '"There should be no wget commands remaining"' 0 $EXIT_CODE
+}
+
+oneTimeSetUp() {
+  export PATH=$TEST_SUPPORT_HOME:$PATH
+}
+
+oneTimeTearDown() {
+  export PATH=$OLD_PATH
+}
+
+setUp() {
+  rm -f $TEST_SUPPORT_HOME/wget.commands
+  rm -f $TEST_SUPPORT_HOME/wget.expects
+  touch $TEST_SUPPORT_HOME/wget.expects
+}
+
+tearDown() {
+  rm $SOUT
+  rm $SERR
+  if [[ -f $TEST_SUPPORT_HOME/wget.log ]]; then
+    cat $TEST_SUPPORT_HOME/wget.log
+    rm -f $TEST_SUPPORT_HOME/wget.log
+  fi
+}
+
+testHelpPage() {
+  run_check -?
+  EXIT_CODE=$?
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+  OUTPUT=`get_line_from_file $SOUT 1`
+  ${_ASSERT_EQUALS_} '"Version should be printed"' '"Check service dependency, version DEV-SNAPSHOT"' '"$OUTPUT"'
+}
+
+testInvalidArgument() {
+  run_check -z
+  EXIT_CODE=$?
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+}
+
+testMandatoryArguments() {
+  run_check -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile
+  EXIT_CODE=$?
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+  run_check -h localhost -b batchquery.jsp -m Monitoring.Domain -d profile
+  EXIT_CODE=$?
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+  run_check -h localhost -p 8080 -m Monitoring.Domain -d profile
+  EXIT_CODE=$?
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+  run_check -h localhost -p 8080 -b batchquery.jsp -d profile
+  EXIT_CODE=$?
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile
+  EXIT_CODE=$?
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain
+  EXIT_CODE=$?
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+}
+
+testTestModeOutput() {
+  assert_no_wget_commands_outstanding
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  echo "Monitoring.Domain:name=profileServiceClient~Name~Profile~MaxImpactToOverallStatusAsString~FAIL~LastFailureTime~1247136988759~LastSuccessTime~1247136998965~FailureCount~0~LastException~~StatusAsString~OK~ErrorCountingPolicy~SomeClass" > $OUTPUT_FILE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 1`
+  ${_ASSERT_EQUALS_} '"Script should print warning when in test mode"' '"WARNING: Running in test mode"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 0"' 0 $EXIT_CODE
+}
+
+testOptionalArguments() {
+  assert_no_wget_commands_outstanding
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  echo "Monitoring.Domain:name=profileServiceClient~Name~Profile~MaxImpactToOverallStatusAsString~FAIL~LastFailureTime~1247136988759~LastSuccessTime~1247136998965~FailureCount~0~LastException~~StatusAsString~OK~ErrorCountingPolicy~SomeClass" > $OUTPUT_FILE
+  # extended output
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE -e
+  EXIT_CODE=$?
+  ${_ASSERT_EQUALS_} '"Exit code should be 0"' 0 $EXIT_CODE
+}
+
+testSimpleOk() {
+  assert_no_wget_commands_outstanding
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  echo "Monitoring.Domain:name=profileServiceClient~Name~Profile~MaxImpactToOverallStatusAsString~FAIL~LastFailureTime~1247136988759~LastSuccessTime~1247136998965~FailureCount~0~LastException~~StatusAsString~OK~ErrorCountingPolicy~SomeClass" > $OUTPUT_FILE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be OK"' '"Status: OK (Max Status: FAIL)"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 0"' 0 $EXIT_CODE
+}
+
+testSimpleOkExtended() {
+  assert_no_wget_commands_outstanding
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  echo "Monitoring.Domain:name=profileServiceClient~Name~Profile~MaxImpactToOverallStatusAsString~FAIL~LastFailureTime~1247136988759~LastSuccessTime~1247136998965~FailureCount~0~LastException~~StatusAsString~OK~ErrorCountingPolicy~SomeClass" > $OUTPUT_FILE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE -e
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be OK"' '"Status: OK (Max Status: FAIL)|Current Entry URL: <br>Last Exception:<br>"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 0"' 0 $EXIT_CODE
+}
+
+testSimpleWarn() {
+  assert_no_wget_commands_outstanding
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  echo "Monitoring.Domain:name=profileServiceClient~Name~Profile~MaxImpactToOverallStatusAsString~FAIL~LastFailureTime~1247136988759~LastSuccessTime~1247136998965~FailureCount~0~LastException~~StatusAsString~WARN~ErrorCountingPolicy~SomeClass" > $OUTPUT_FILE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be WARN"' '"Status: WARN (Max Status: FAIL)"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 1"' 1 $EXIT_CODE
+}
+
+testSimpleWarnExtended() {
+  assert_no_wget_commands_outstanding
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  echo "Monitoring.Domain:name=profileServiceClient~Name~Profile~MaxImpactToOverallStatusAsString~FAIL~LastFailureTime~1247136988759~LastSuccessTime~1247136998965~FailureCount~0~LastException~~StatusAsString~WARN~ErrorCountingPolicy~SomeClass" > $OUTPUT_FILE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE -e
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be WARN"' '"Status: WARN (Max Status: FAIL)|Current Entry URL: <br>Last Exception:<br>"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 1"' 1 $EXIT_CODE
+}
+
+testSimpleFail() {
+  assert_no_wget_commands_outstanding
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  echo "Monitoring.Domain:name=profileServiceClient~Name~Profile~MaxImpactToOverallStatusAsString~FAIL~LastFailureTime~1247136988759~LastSuccessTime~1247136998965~FailureCount~0~LastException~~StatusAsString~FAIL~ErrorCountingPolicy~SomeClass" > $OUTPUT_FILE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be FAIL"' '"Status: FAIL (Max Status: FAIL)"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 2"' 2 $EXIT_CODE
+}
+
+testSimpleFailExtended() {
+  assert_no_wget_commands_outstanding
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  echo "Monitoring.Domain:name=profileServiceClient~Name~Profile~MaxImpactToOverallStatusAsString~FAIL~LastFailureTime~1247136988759~LastSuccessTime~1247136998965~FailureCount~0~LastException~~StatusAsString~FAIL~ErrorCountingPolicy~SomeClass" > $OUTPUT_FILE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE -e
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be FAIL"' '"Status: FAIL (Max Status: FAIL)|Current Entry URL: <br>Last Exception:<br>"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 2"' 2 $EXIT_CODE
+}
+
+testSimpleFailLimitedToWarn() {
+  assert_no_wget_commands_outstanding
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  echo "Monitoring.Domain:name=profileServiceClient~Name~Profile~MaxImpactToOverallStatusAsString~WARN~LastFailureTime~1247136988759~LastSuccessTime~1247136998965~FailureCount~0~LastException~~StatusAsString~FAIL~ErrorCountingPolicy~SomeClass" > $OUTPUT_FILE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be FAIL"' '"Status: FAIL (Max Status: WARN)"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 1"' 1 $EXIT_CODE
+}
+
+testSimpleFailLimitedToWarnExtended() {
+  assert_no_wget_commands_outstanding
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  echo "Monitoring.Domain:name=profileServiceClient~Name~Profile~MaxImpactToOverallStatusAsString~WARN~LastFailureTime~1247136988759~LastSuccessTime~1247136998965~FailureCount~0~LastException~~StatusAsString~FAIL~ErrorCountingPolicy~SomeClass" > $OUTPUT_FILE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE -e
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be FAIL"' '"Status: FAIL (Max Status: WARN)|Current Entry URL: <br>Last Exception:<br>"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 1"' 1 $EXIT_CODE
+}
+
+testSimpleFailLimitedToOk() {
+  assert_no_wget_commands_outstanding
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  echo "Monitoring.Domain:name=profileServiceClient~Name~Profile~MaxImpactToOverallStatusAsString~OK~LastFailureTime~1247136988759~LastSuccessTime~1247136998965~FailureCount~0~LastException~~StatusAsString~FAIL~ErrorCountingPolicy~SomeClass" > $OUTPUT_FILE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be FAIL"' '"Status: FAIL (Max Status: OK)"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 0"' 0 $EXIT_CODE
+}
+
+testOneLineExceptionInExtendedMode() {
+  assert_no_wget_commands_outstanding
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  echo "Monitoring.Domain:name=profileServiceClient~Name~Profile~MaxImpactToOverallStatusAsString~FAIL~LastFailureTime~1247136988759~LastSuccessTime~1247136998965~FailureCount~0~LastException~SomeException~StatusAsString~FAIL~ErrorCountingPolicy~SomeClass" > $OUTPUT_FILE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE -e
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be FAIL"' '"Status: FAIL (Max Status: FAIL)|Current Entry URL: <br>Last Exception:<br>SomeException"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 2"' 2 $EXIT_CODE
+}
+
+testTwoLineExceptionInExtendedMode() {
+  assert_no_wget_commands_outstanding
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  echo "Monitoring.Domain:name=profileServiceClient~Name~Profile~MaxImpactToOverallStatusAsString~FAIL~LastFailureTime~1247136988759~LastSuccessTime~1247136998965~FailureCount~0~LastException~SomeException1" > $OUTPUT_FILE
+  echo "SomeException2~StatusAsString~FAIL~ErrorCountingPolicy~SomeClass" >> $OUTPUT_FILE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE -e
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be FAIL"' '"Status: FAIL (Max Status: FAIL)|Current Entry URL: <br>Last Exception:<br>SomeException1<br>SomeException2"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 2"' 2 $EXIT_CODE
+}
+
+testThreeLineExceptionInExtendedMode() {
+  assert_no_wget_commands_outstanding
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  echo "Monitoring.Domain:name=profileServiceClient~Name~Profile~MaxImpactToOverallStatusAsString~FAIL~LastFailureTime~1247136988759~LastSuccessTime~1247136998965~FailureCount~0~LastException~SomeException1" > $OUTPUT_FILE
+  echo "  at SomeException2" >> $OUTPUT_FILE
+  echo "  at SomeException3~StatusAsString~FAIL~ErrorCountingPolicy~SomeClass" >> $OUTPUT_FILE
+
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE -e
+  EXIT_CODE=$?
+
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be FAIL"' '"Status: FAIL (Max Status: FAIL)|Current Entry URL: <br>Last Exception:<br>SomeException1<br>  at SomeException2<br>  at SomeException3"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 2"' 2 $EXIT_CODE
+}
+
+testThirtyLineExceptionInExtendedMode() {
+  assert_no_wget_commands_outstanding
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  echo "Monitoring.Domain:name=profileServiceClient~Name~Profile~MaxImpactToOverallStatusAsString~FAIL~LastFailureTime~1247136988759~LastSuccessTime~1247136998965~FailureCount~0~LastException~SomeException1" > $OUTPUT_FILE
+  for i in $(seq 2 1 29); do
+    echo "  at SomeException${i}" >> $OUTPUT_FILE
+  done
+  echo "  at SomeException30~StatusAsString~FAIL~ErrorCountingPolicy~SomeClass" >> $OUTPUT_FILE
+
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE -e
+  EXIT_CODE=$?
+
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be FAIL"' '"Status: FAIL (Max Status: FAIL)|Current Entry URL: <br>Last Exception:<br>SomeException1<br>  at SomeException2<br>  at SomeException3<br>  at SomeException4<br>  at SomeException5<br>  at SomeException6<br>  at SomeException7<br>  at SomeException8<br>  at SomeException9<br>  at SomeException10<br>  at SomeException11<br>  at SomeException12<br>  at SomeException13<br>  at SomeException14<br>  at SomeException15<br>  at SomeException16<br>  at SomeException17<br>  at SomeException18<br>  at SomeException19<br>  at SomeException20<br>  at SomeException21<br>  at SomeException22<br>  at SomeException23<br>  at SomeException24<br>  at SomeException25<br>  at SomeException26<br>  at SomeException27<br>  at SomeException28<br>  at SomeException29<br>  at SomeException30"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 2"' 2 $EXIT_CODE
+}
+
+testFirstWgetFailed() {
+  assert_no_wget_commands_outstanding
+  expect_wget -q -O dummy http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  command_wget "exit 1"
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t dummy
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be UNKNOWN"' '"Status: UNKNOWN (Cannot connect to monitoring interface)"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+}
+
+testFirstWgetFailedExtended() {
+  assert_no_wget_commands_outstanding
+  expect_wget -q -O dummy http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  command_wget "exit 1"
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t dummy -e
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be UNKNOWN"' '"Status: UNKNOWN (Cannot connect to monitoring interface)"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+}
+
+testBlankOutput() {
+  assert_no_wget_commands_outstanding
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  echo "" > $OUTPUT_FILE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be UNKNOWN"' '"Status: UNKNOWN (Invalid response from monitoring interface)"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+}
+
+testBlankOutputExtended() {
+  assert_no_wget_commands_outstanding
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  echo "" > $OUTPUT_FILE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE -e
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be UNKNOWN"' '"Status: UNKNOWN (Invalid response from monitoring interface)"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+}
+
+testGarbledOutput() {
+  assert_no_wget_commands_outstanding
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  echo "Monitoring.Domain:name=overallStatus~Name@OverallStatus~StatusAsString@FAIL" > $OUTPUT_FILE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be UNKNOWN"' '"Status: UNKNOWN (Invalid response from monitoring interface)"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+}
+
+testGarbledOutputExtended() {
+  assert_no_wget_commands_outstanding
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  echo "Monitoring.Domain:name=overallStatus~Name@OverallStatus~StatusAsString@FAIL" > $OUTPUT_FILE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE -e
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be UNKNOWN"' '"Status: UNKNOWN (Invalid response from monitoring interface)"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+}
+
+testInvalidStatus() {
+  assert_no_wget_commands_outstanding
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  echo "Monitoring.Domain:name=overallStatus~Name~OverallStatus~StatusAsString~FAILED" > $OUTPUT_FILE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be FAILED"' '"Status: FAILED (Invalid response from monitoring interface)"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+}
+
+testInvalidStatusExtended() {
+  assert_no_wget_commands_outstanding
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  echo "Monitoring.Domain:name=overallStatus~Name~OverallStatus~StatusAsString~FAILED" > $OUTPUT_FILE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE -e
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be FAILED"' '"Status: FAILED (Invalid response from monitoring interface)"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+}
+
+testBothAuthenticationParametersSentThrough() {
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q --http-user=username --http-password=password -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  echo "Monitoring.Domain:name=profileServiceClient~Name~Profile~MaxImpactToOverallStatusAsString~FAIL~LastFailureTime~1247136988759~LastSuccessTime~1247136998965~FailureCount~0~LastException~~StatusAsString~OK~ErrorCountingPolicy~SomeClass" > $OUTPUT_FILE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE -U username -P password
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be OK (Max Status: FAIL)"' '"Status: OK (Max Status: FAIL)"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 0"' 0 $EXIT_CODE
+}
+
+testBothAuthenticationParametersRequired() {
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t dummy -U username
+  EXIT_CODE=$?
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t dummy -P password
+  EXIT_CODE=$?
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+}
+
+testHttpAuthenticationFailed() {
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q --http-user=username --http-password=invalid -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+  command_wget exit 6
+  echo "Monitoring.Domain:name=profileServiceClient~Name~Profile~MaxImpactToOverallStatusAsString~FAIL~LastFailureTime~1247136988759~LastSuccessTime~1247136998965~FailureCount~0~LastException~~StatusAsString~OK~ErrorCountingPolicy~SomeClass" > $OUTPUT_FILE
+  run_check -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -d profile -t $OUTPUT_FILE -U username -P invalid
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be UNKNOWN"' '"Status: UNKNOWN (Monitoring interface authentication failed)"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+}
+
+# Run the tests
+. $TEST_SUPPORT_HOME/shunit2

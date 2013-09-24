@@ -1,0 +1,8 @@
+ERROR: Unexpected call to wget with arguments: -q -O /tmp/check_dependency.7447 http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+ERROR: Unexpected call to wget with arguments: -q -O /tmp/check_dependency.11743 http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+ERROR: Unexpected call to wget with arguments: -q -O /tmp/check_dependency.17800 http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+ERROR: Unexpected call to wget with arguments: -q -O /tmp/check_dependency.22099 http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+ERROR: Unexpected call to wget with arguments: -q -O /tmp/check_dependency.26561 http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+ERROR: Unexpected call to wget with arguments: -q -O /tmp/check_dependency.30835 http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+ERROR: Unexpected call to wget with arguments: -q -O /tmp/check_dependency.3245 http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient
+ERROR: Unexpected call to wget with arguments: -q -O /tmp/check_dependency.7583 http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3Dmonitor.profileServiceClient

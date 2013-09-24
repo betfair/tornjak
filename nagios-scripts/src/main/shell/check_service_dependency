@@ -1,0 +1,300 @@
+#!/bin/bash
+#
+# Copyright 2013, The Sporting Exchange Limited
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+VERSION=${project.version}
+if [[ -z "$VERSION" ]]; then
+  VERSION=DEV-SNAPSHOT
+fi
+
+USERNAME=
+PASSWORD=
+HOST=
+PORT=
+BATCH_QUERY_PATH=
+MONITORING_DOMAIN=
+DEPENDENCY_NAME=
+NAGIOS_VERSION="2"
+EXTENDED_MODE=
+DEBUG=false
+INPUT_FILE=/tmp/check_dependency.$$
+MYARGS="?U:?P:h:p:b:m:l:d:t:?e?n:?v"
+
+function usage {
+  echo "Check service dependency, version $VERSION"
+  echo "$0 <options> (All options are mandatory)"
+  echo "  -h <host address>          ; e.g. localhost"
+  echo "  -p <http port>             ; e.g. 8080"
+  echo "  -b <batch query path>      ; e.g. myapp/admin/batchquery.jsp"
+  echo "  -m <monitoring_jmx_domain> ; e.g. Monitoring.MyApp"
+  echo "  -d <dependency_name>       ; e.g. points"
+  echo "  -n <nagios_version>        ; Nagios compatibility mode (Optional - defaults to 2)"
+  echo "  -U <username>              ; Authentication for jmx interface (Optional)"
+  echo "  -P <password>              ; Authentication for jmx interface (Optional)"
+  echo "  -e                         ; Extended mode (Optional - Not compatible with Nagios 3)"
+  echo "  -v                         ; Verbose mode (Optional)"
+  echo "  -?                         ; Display this help page"
+  exit 3
+}
+
+while getopts $MYARGS o; do
+  case "$o" in
+    h) HOST="$OPTARG";;
+    p) PORT="$OPTARG";;
+    b) BATCH_QUERY_PATH="$OPTARG";;
+    m) MONITORING_DOMAIN="$OPTARG";;
+    d) DEPENDENCY_NAME="$OPTARG";;
+    n) NAGIOS_VERSION="$OPTARG";;
+    v) DEBUG="true";;
+    e) EXTENDED_MODE="true";;
+    t) INPUT_FILE="$OPTARG"; echo "WARNING: Running in test mode";;
+    U) USERNAME="$OPTARG";;
+    P) PASSWORD="$OPTARG";;
+    *) usage;;
+  esac
+done
+
+if [[ $DEBUG = "true" ]]; then
+  echo "Arguments:"
+  while getopts $MYARGS a; do
+    echo "  $OPTIND $a=$OPTARG"
+  done
+fi
+
+if [[ $EXTENDED_MODE = "true" ]]; then
+  if [[ $NAGIOS_VERSION = "3" ]]; then
+    echo "Extended mode not supported for Nagios 3"
+    usage;
+  fi
+fi
+
+case $NAGIOS_VERSION in
+  2) ;;
+  3) EXTENDED_MODE="true";; # force extended mode
+  *) echo "Unsupported Nagios version: $NAGIOS_VERSION"; usage;;
+esac
+
+if [[ -z "$HOST" ]]; then
+  echo "Missing option: -h"
+  usage;
+fi
+if [[ -z "$PORT" ]]; then
+  echo "Missing option: -p"
+  usage;
+fi
+if [[ -z "$BATCH_QUERY_PATH" ]]; then
+  echo "Missing option: -b"
+  usage;
+fi
+if [[ -z "$MONITORING_DOMAIN" ]]; then
+  echo "Missing option: -m"
+  usage;
+fi
+if [[ -z "$DEPENDENCY_NAME" ]]; then
+  echo "Missing option: -d"
+  usage;
+fi
+if [[ ! -z "$USERNAME" ]]; then
+  if [[ -z "$PASSWORD" ]]; then
+    echo "Must specify either neither, or both, of -U and -P. Missing option: -P"
+    usage;
+  fi
+else
+  if [[ ! -z "$PASSWORD" ]]; then
+    echo "Must specify either neither, or both, of -U and -P. Missing option: -U"
+    usage;
+  fi
+fi
+
+USERNAME_PASSWORD_ARG=
+if [[ ! -z "$USERNAME" ]]; then
+  USERNAME_PASSWORD_ARG=" --http-user=$USERNAME --http-password=$PASSWORD"
+fi
+
+MONITOR_URL="http://${HOST}:${PORT}/${BATCH_QUERY_PATH}?on=${MONITORING_DOMAIN}%3Aname%3Dmonitor.${DEPENDENCY_NAME}ServiceClient"
+
+NAME=
+MAX_STATUS=
+STATUS=
+
+if [[ "$DEBUG" = "true" ]]; then
+  echo "About to call: wget$USERNAME_PASSWORD_ARG -q -O $INPUT_FILE \"$MONITOR_URL\""
+fi
+wget -q$USERNAME_PASSWORD_ARG -O $INPUT_FILE "$MONITOR_URL"
+WGET_EXIT_CODE=$?
+# Fail if we can't talk to the server
+if [[ $WGET_EXIT_CODE -ne 0 ]]; then
+  case "$WGET_EXIT_CODE" in
+    6) echo "Status: UNKNOWN (Monitoring interface authentication failed)";;
+    *) echo "Status: UNKNOWN (Cannot connect to monitoring interface)";;
+  esac
+  rm $INPUT_FILE
+  exit 3
+fi
+
+ATTRIB_INDEX=2
+VALUE_INDEX=3
+
+NUM_LINES=`cat $INPUT_FILE | wc -l`
+for LINE_NUMBER in $(seq 1 1 $NUM_LINES); do
+  LINE=`cat $INPUT_FILE | tail --lines=+$LINE_NUMBER | head -1`
+
+  if [[ "$DEBUG" = "true" ]]; then
+    echo "LINE($LINE_NUMBER) = $LINE"
+  fi
+
+  NUM_FIELDS=`echo $LINE | grep "~" | sed -e 's/~/\n/g' | wc -l`
+  if [[ $DEBUG = "true" ]]; then
+    echo "NUM_FIELDS = $NUM_FIELDS"
+  fi
+
+    while (test $ATTRIB_INDEX -lt $NUM_FIELDS); do
+      KEY=`echo "$LINE" | grep "~" | cut -d~ -f$ATTRIB_INDEX`
+      VAL=`echo "$LINE" | grep "~" | cut -d~ -f$VALUE_INDEX`
+
+      ATTRIB_INDEX=`echo "$ATTRIB_INDEX+2" | bc`
+      VALUE_INDEX=`echo "$VALUE_INDEX+2" | bc`
+
+      if [[ $DEBUG = "true" ]]; then
+        echo "$KEY = $VAL ($ATTRIB_INDEX, $VALUE_INDEX)"
+      fi
+
+      if [[ "$KEY" = "StatusAsString" ]]; then
+        STATUS=$VAL
+      fi
+      if [[ "$KEY" = "MaxImpactToOverallStatusAsString" ]]; then
+        MAX_STATUS=$VAL
+      fi
+      if [[ "$KEY" = "Name" ]]; then
+        NAME=$VAL
+      fi
+    done
+
+    # reset variables
+    ATTRIB_INDEX=2
+    VALUE_INDEX=3
+done
+
+LAST_EXCEPTION_START_LINE=`cat $INPUT_FILE | grep -no LastException | cut -d: -f1`
+EXCEPTION_FIRST_LINE=`cat $INPUT_FILE | grep LastException | sed -e 's/.*LastException~//'`
+EXCEPTION_TMP_FILE=$INPUT_FILE.exception
+if ( echo "$EXCEPTION_FIRST_LINE" | grep -q "~" ); then
+  echo $EXCEPTION_FIRST_LINE | sed -e 's/~.*//' > $EXCEPTION_TMP_FILE
+else
+  if [[ $DEBUG = "true" ]]; then
+    echo "LAST_EXCEPTION_START_LINE = $LAST_EXCEPTION_START_LINE"
+  fi
+  EXCEPTION_BODY_START_LINE=`echo "$LAST_EXCEPTION_START_LINE+1" | bc`
+  EXCEPTION_BODY_LINES=`tail --lines=+$EXCEPTION_BODY_START_LINE $INPUT_FILE | grep "[^ ]" | grep -v "~" | wc -l`
+  # ensure you update this in the next "if" if changed
+  EXCEPTION_BODY=`tail --lines=+$EXCEPTION_BODY_START_LINE $INPUT_FILE | grep "[^ ]" | grep -v "~" | head -$EXCEPTION_BODY_LINES`
+  EXCEPTION_LAST_LINE_NUMBER=`echo "$EXCEPTION_BODY_START_LINE+$EXCEPTION_BODY_LINES" | bc`
+  
+  echo $EXCEPTION_FIRST_LINE >> $EXCEPTION_TMP_FILE
+  if [[ ! -z $EXCEPTION_BODY ]]; then
+    # have to repeat the command to ensure we keep the whitespace
+   tail --lines=+$EXCEPTION_BODY_START_LINE $INPUT_FILE | grep "[^ ]" | grep -v "~" | head -$EXCEPTION_BODY_LINES >> $EXCEPTION_TMP_FILE
+  fi
+  # again, can't use variable as that strips the whitespace
+  tail --lines=+$EXCEPTION_LAST_LINE_NUMBER $INPUT_FILE | head -1 | grep "[^ ]" | sed -e 's/~.*//g' >> $EXCEPTION_TMP_FILE
+fi
+
+OUTPUT_MAX_STATUS=true
+if [[ $MAX_STATUS = "OK" ]]; then
+  STATUS_NUM=0
+else
+  if [[ $MAX_STATUS = "WARN" ]]; then
+    if [[ $STATUS = "FAIL" || $STAUS = "WARN" ]]; then
+      STATUS_NUM=1
+    fi
+  fi
+fi
+
+if [[ "$STATUS_NUM" = "" ]]; then
+    # default to unknown
+    STATUS_NUM=3
+    if [[ $STATUS = "OK" ]]; then
+      STATUS_NUM=0
+    else
+      if [[ $STATUS = "WARN" ]]; then
+        STATUS_NUM=1
+      else
+        if [[ $STATUS = "FAIL" ]]; then
+          STATUS_NUM=2
+        else
+          if [[ -z "$STATUS" ]]; then
+            STATUS="UNKNOWN (Invalid response from monitoring interface)"
+            OUTPUT_MAX_STATUS=false
+          else
+            # treat anything else as unknown exit code, but output message as well
+            STATUS="$STATUS (Invalid response from monitoring interface)"
+            OUTPUT_MAX_STATUS=false
+          fi
+        fi
+      fi
+    fi
+fi
+
+if [[ $NAGIOS_VERSION = "3" ]]; then
+  if [[ $OUTPUT_MAX_STATUS = "true" ]]; then
+    echo "Status: $STATUS (Max Status: $MAX_STATUS)"
+  else
+    echo "Status: $STATUS"
+  fi
+  if [[ $STATUS_NUM -ne 3 ]]; then
+    echo "Current Entry URL: $URL"
+    echo "Last Exception:"
+    cat $EXCEPTION_TMP_FILE
+  fi
+fi
+if [[ $NAGIOS_VERSION = "2" ]]; then
+  if [[ $EXTENDED_MODE = "true" ]]; then
+    if [[ $STATUS_NUM -eq 3 ]]; then
+      if [[ $OUTPUT_MAX_STATUS = "true" ]]; then
+        echo "Status: $STATUS (Max Status: $MAX_STATUS)"
+      else
+        echo "Status: $STATUS"
+      fi
+    else
+      if [[ $OUTPUT_MAX_STATUS = "true" ]]; then
+        echo -n "Status: $STATUS (Max Status: $MAX_STATUS)|"
+      else
+        echo -n "Status: $STATUS|"
+      fi
+      echo -n "Current Entry URL: $URL"
+      echo -n "<br>Last Exception:"
+      # Need to prefix each line with a <br> and do echo -n
+      NUM_LINES=`cat $EXCEPTION_TMP_FILE | wc -l`
+      for LINE_NUMBER in $(seq 1 1 $NUM_LINES); do
+        LINE=`cat $EXCEPTION_TMP_FILE | tail --lines=+$LINE_NUMBER | head -1`
+        echo -n "<br>$LINE"
+      done
+      # terminate the line
+      echo
+    fi
+  else # must be false or not specified or exit code is going to be 3
+    if [[ $OUTPUT_MAX_STATUS = "true" ]]; then
+      echo "Status: $STATUS (Max Status: $MAX_STATUS)"
+    else
+      echo "Status: $STATUS"
+    fi
+  fi
+fi
+
+rm $EXCEPTION_TMP_FILE
+rm $INPUT_FILE
+
+exit $STATUS_NUM

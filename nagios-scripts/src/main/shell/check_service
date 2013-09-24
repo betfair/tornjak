@@ -1,0 +1,177 @@
+#!/bin/bash
+#
+# Copyright 2013, The Sporting Exchange Limited
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+VERSION=${project.version}
+if [[ -z "$VERSION" ]]; then
+  VERSION=DEV-SNAPSHOT
+fi
+
+USERNAME=
+PASSWORD=
+HOST=
+PORT=
+BATCH_QUERY_PATH=
+MONITORING_DOMAIN=
+BEAN_NAME=
+DEBUG=false
+INPUT_FILE=/tmp/check_service.$$
+MYARGS="?U:?P:h:p:b:m:n:t:?v"
+
+function usage {
+  echo "Check service, version $VERSION"
+  echo "$0 <options> (All options are mandatory)"
+  echo "  -h <host address>          ; e.g. localhost"
+  echo "  -p <http port>             ; e.g. 8080"
+  echo "  -b <batch query path>      ; e.g. appname/admin/batchquery.jsp"
+  echo "  -m <monitoring_jmx_domain> ; e.g. Monitoring.Facade.MyApp"
+  echo "  -n <status_name>           ; e.g. overallStatus"
+  echo "  -U <username>              ; Authentication for jmx interface (Optional)"
+  echo "  -P <password>              ; Authentication for jmx interface (Optional)"
+  echo "  -v                         ; Verbose mode (optional)"
+  echo "  -?                         ; Display this help page"
+  exit $1
+}
+
+while getopts $MYARGS o; do
+  case "$o" in
+    h) HOST="$OPTARG";;
+    p) PORT="$OPTARG";;
+    b) BATCH_QUERY_PATH="$OPTARG";;
+    m) MONITORING_DOMAIN="$OPTARG";;
+    n) BEAN_NAME="$OPTARG";;
+    v) DEBUG="true";;
+    t) INPUT_FILE="$OPTARG"; echo "WARNING: Running in test mode";;
+    U) USERNAME="$OPTARG";;
+    P) PASSWORD="$OPTARG";;
+    *) usage 3;;
+  esac
+done
+
+if [[ $DEBUG = "true" ]]; then
+  echo "Arguments:"
+  while getopts $MYARGS o; do
+    echo "  $OPTIND $o=$OPTARG"
+  done
+fi
+
+if [[ -z "$HOST" ]]; then
+  echo "Missing option: -h"
+  usage 3;
+fi
+if [[ -z "$PORT" ]]; then
+  echo "Missing option: -p"
+  usage 3;
+fi
+if [[ -z "$BATCH_QUERY_PATH" ]]; then
+  echo "Missing option: -b"
+  usage 3;
+fi
+if [[ -z "$MONITORING_DOMAIN" ]]; then
+  echo "Missing option: -m"
+  usage 3;
+fi
+if [[ -z "$BEAN_NAME" ]]; then
+  echo "Missing option: -n"
+  usage 3;
+fi
+if [[ ! -z "$USERNAME" ]]; then
+  if [[ -z "$PASSWORD" ]]; then
+    echo "Must specify either neither, or both, of -U and -P. Missing option: -P"
+    usage 3;
+  fi
+else
+  if [[ ! -z "$PASSWORD" ]]; then
+    echo "Must specify either neither, or both, of -U and -P. Missing option: -U"
+    usage 3;
+  fi
+fi
+
+USERNAME_PASSWORD_ARG=
+if [[ ! -z "$USERNAME" ]]; then
+  USERNAME_PASSWORD_ARG=" --http-user=$USERNAME --http-password=$PASSWORD"
+fi
+
+MONITOR_URL="http://${HOST}:${PORT}/${BATCH_QUERY_PATH}?on=${MONITORING_DOMAIN}%3Aname%3D${BEAN_NAME}"
+
+ATTRIB_INDEX=2
+VALUE_INDEX=3
+
+NAME=
+# default response
+STATUS=""
+
+wget -q$USERNAME_PASSWORD_ARG -O $INPUT_FILE "$MONITOR_URL"
+WGET_EXIT_CODE=$?
+# Fail if we can't talk to the server
+if [[ $WGET_EXIT_CODE -ne 0 ]]; then
+  rm $INPUT_FILE
+  case "$WGET_EXIT_CODE" in
+    6) echo "Status: UNKNOWN (Monitoring interface authentication failed)"
+       exit 3
+       ;;
+    *) echo "Status: FAIL (Cannot connect to monitoring interface)"
+       exit 2
+       ;;
+  esac
+
+
+fi
+
+NUM_LINES=`cat $INPUT_FILE | grep "~" | sed -e 's/~/\n/g' | wc -l`
+while (test $ATTRIB_INDEX -lt $NUM_LINES); do
+  KEY=`cat $INPUT_FILE | grep "~" | cut -d~ -f$ATTRIB_INDEX`
+  VAL=`cat $INPUT_FILE | grep "~" | cut -d~ -f$VALUE_INDEX`
+
+  ATTRIB_INDEX=`echo "$ATTRIB_INDEX+2" | bc`
+  VALUE_INDEX=`echo "$VALUE_INDEX+2" | bc`
+
+  #echo "$KEY=$VAL" 
+ 
+  if [[ "$KEY" = "StatusAsString" ]]; then
+    STATUS=$VAL
+  else
+    if [[ "$KEY" = "Name" ]]; then
+      NAME=$VAL
+    fi
+  fi
+done
+
+# default to unknown
+STATUS_NUM=3
+if [[ $STATUS = "OK" ]]; then
+  STATUS_NUM=0
+else
+  if [[ $STATUS = "WARN" ]]; then
+    STATUS_NUM=1
+  else
+    if [[ $STATUS = "FAIL" ]]; then
+      STATUS_NUM=2
+    else
+      if [[ -z "$STATUS" ]]; then
+        STATUS="FAIL (Invalid response from monitoring interface)"
+        STATUS_NUM=2
+      else
+        # treat anything else as unknown exit code, but output message as well
+        STATUS="$STATUS (Invalid response from monitoring interface)"
+      fi
+    fi
+  fi
+fi
+
+echo "Status: $STATUS"
+
+exit $STATUS_NUM

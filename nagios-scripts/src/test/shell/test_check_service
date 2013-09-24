@@ -1,0 +1,230 @@
+#!/bin/bash
+#
+# Copyright 2013, The Sporting Exchange Limited
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+RUN_DIR=`dirname $0`
+TEST_SUPPORT_HOME=$RUN_DIR/testsupport
+SRC_DIR=../../main/shell
+OLD_PATH=$PATH
+SOUT=/tmp/sout.$$
+SERR=/tmp/serr.$$
+
+run_check_service() {
+  $SRC_DIR/check_service $* >$SOUT 2>$SERR
+  return $?
+}
+
+get_line_from_file() {
+  cat $1 | tail --lines=+$2 | head -1
+}
+
+command_wget() {
+  echo $* >> $TEST_SUPPORT_HOME/wget.commands
+}
+
+expect_wget() {
+  echo $* >> $TEST_SUPPORT_HOME/wget.expects
+}
+
+assert_no_wget_commands_outstanding() {
+  wget_check_no_commands
+  EXIT_CODE=$?
+  if [[ ! $EXIT_CODE ]]; then
+    cat $TEST_SUPPORT_HOME/wget.commands
+  fi
+  ${_ASSERT_EQUALS_} '"There should be no wget commands remaining"' 0 $EXIT_CODE
+}
+
+oneTimeSetUp() {
+  export PATH=$TEST_SUPPORT_HOME:$PATH
+}
+
+oneTimeTearDown() {
+  export PATH=$OLD_PATH
+}
+
+setUp() {
+  rm -f $TEST_SUPPORT_HOME/wget.commands
+  rm -f $TEST_SUPPORT_HOME/wget.expects
+  touch $TEST_SUPPORT_HOME/wget.expects
+}
+
+tearDown() {
+  rm $SOUT
+  rm $SERR
+  if [[ -f $TEST_SUPPORT_HOME/wget.log ]]; then
+    cat $TEST_SUPPORT_HOME/wget.log
+    rm -f $TEST_SUPPORT_HOME/wget.log
+  fi
+}
+
+testHelpPage() {
+  run_check_service -?
+  EXIT_CODE=$?
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+  OUTPUT=`get_line_from_file $SOUT 1`
+  ${_ASSERT_EQUALS_} '"Version should be printed"' '"Check service, version DEV-SNAPSHOT"' '"$OUTPUT"'
+}
+
+testInvalidArgument() {
+  run_check_service -z
+  EXIT_CODE=$?
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+}
+
+testMandatoryArguments() {
+  run_check_service -p 8080 -b batchquery.jsp -m Monitoring.Domain -n overallStatus
+  EXIT_CODE=$?
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+  run_check_service -h localhost -b batchquery.jsp -m Monitoring.Domain -n overallStatus
+  EXIT_CODE=$?
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+  run_check_service -h localhost -p 8080 -m Monitoring.Domain -n overallStatus
+  EXIT_CODE=$?
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+  run_check_service -h localhost -p 8080 -b batchquery.jsp -n overallStatus
+  EXIT_CODE=$?
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+  run_check_service -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain
+  EXIT_CODE=$?
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+}
+
+testTestModeOutput() {
+  assert_no_wget_commands_outstanding
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3DoverallStatus
+  echo "Monitoring.Domain:name=overallStatus~Name~OverallStatus~StatusAsString~OK" > $OUTPUT_FILE
+  run_check_service -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -n overallStatus -t $OUTPUT_FILE
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 1`
+  ${_ASSERT_EQUALS_} '"Script should print warning when in test mode"' '"WARNING: Running in test mode"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 0"' 0 $EXIT_CODE
+}
+
+testSimpleOk() {
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3DoverallStatus
+  echo "Monitoring.Domain:name=overallStatus~Name~OverallStatus~StatusAsString~OK" > $OUTPUT_FILE
+  run_check_service -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -n overallStatus -t $OUTPUT_FILE
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be OK"' '"Status: OK"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 0"' 0 $EXIT_CODE
+}
+
+testSimpleWarn() {
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3DoverallStatus
+  echo "Monitoring.Domain:name=overallStatus~Name~OverallStatus~StatusAsString~WARN" > $OUTPUT_FILE
+  run_check_service -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -n overallStatus -t $OUTPUT_FILE
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be WARN"' '"Status: WARN"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 1"' 1 $EXIT_CODE
+}
+
+testSimpleFail() {
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3DoverallStatus
+  echo "Monitoring.Domain:name=overallStatus~Name~OverallStatus~StatusAsString~FAIL" > $OUTPUT_FILE
+  run_check_service -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -n overallStatus -t $OUTPUT_FILE
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be FAIL"' '"Status: FAIL"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 2"' 2 $EXIT_CODE
+}
+
+testWgetFailed() {
+  assert_no_wget_commands_outstanding
+  command_wget "exit 1"
+  expect_wget -q -O dummy http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3DoverallStatus
+  run_check_service -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -n overallStatus -t dummy
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be FAIL"' '"Status: FAIL (Cannot connect to monitoring interface)"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 2"' 2 $EXIT_CODE
+}
+
+testBlankOutput() {
+  OUTPUT_FILE=/tmp/wget.$$
+  echo "" > $OUTPUT_FILE
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3DoverallStatus
+  run_check_service -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -n overallStatus -t $OUTPUT_FILE
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be FAIL"' '"Status: FAIL (Invalid response from monitoring interface)"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 2"' 2 $EXIT_CODE
+}
+
+testGarbledOutput() {
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3DoverallStatus
+  echo "Monitoring.Domain:name=overallStatus~Name@OverallStatus~StatusAsString@FAIL" > $OUTPUT_FILE
+  run_check_service -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -n overallStatus -t $OUTPUT_FILE
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be FAIL"' '"Status: FAIL (Invalid response from monitoring interface)"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 2"' 2 $EXIT_CODE
+}
+
+testInvalidStatus() {
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3DoverallStatus
+  echo "Monitoring.Domain:name=overallStatus~Name~OverallStatus~StatusAsString~FAILED" > $OUTPUT_FILE
+  run_check_service -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -n overallStatus -t $OUTPUT_FILE
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be FAILED"' '"Status: FAILED (Invalid response from monitoring interface)"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+}
+
+testBothAuthenticationParametersSentThrough() {
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q --http-user=username --http-password=password -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3DoverallStatus
+  echo "Monitoring.Domain:name=overallStatus~Name~OverallStatus~StatusAsString~OK" > $OUTPUT_FILE
+  run_check_service -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -n overallStatus -t $OUTPUT_FILE -U username -P password
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be OK"' '"Status: OK"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 0"' 0 $EXIT_CODE
+}
+
+testBothAuthenticationParametersRequired() {
+  run_check_service -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -n overallStatus -t dummy -U username
+  EXIT_CODE=$?
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+  run_check_service -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -n overallStatus -t dummy -P password
+  EXIT_CODE=$?
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+}
+
+testHttpAuthenticationFailed() {
+  OUTPUT_FILE=/tmp/wget.$$
+  expect_wget -q --http-user=username --http-password=invalid -O $OUTPUT_FILE http://localhost:8080/batchquery.jsp?on=Monitoring.Domain%3Aname%3DoverallStatus
+  command_wget exit 6
+  echo "Monitoring.Domain:name=overallStatus~Name~OverallStatus~StatusAsString~FAILED" > $OUTPUT_FILE
+  run_check_service -h localhost -p 8080 -b batchquery.jsp -m Monitoring.Domain -n overallStatus -t $OUTPUT_FILE -U username -P invalid
+  EXIT_CODE=$?
+  OUTPUT=`get_line_from_file $SOUT 2`
+  ${_ASSERT_EQUALS_} '"Status should be UNKNOWN"' '"Status: UNKNOWN (Monitoring interface authentication failed)"' '"$OUTPUT"'
+  ${_ASSERT_EQUALS_} '"Exit code should be 3"' 3 $EXIT_CODE
+}
+
+
+
+# Run the tests
+. $TEST_SUPPORT_HOME/shunit2
