@@ -114,7 +114,7 @@
 			<modules>
 				<module>monitor</module>
 				<module>kpi</module>
-				<module>monitoring-overlay</module>
+				<module>monitor-overlay</module>
 			</modules>
 		</profile>
 		<profile>
@@ -127,7 +127,7 @@
 			<modules>
 				<module>monitor</module>
 				<module>kpi</module>
-				<module>monitoring-overlay</module>
+				<module>monitor-overlay</module>
 				<module>nagios-scripts</module>
 			</modules>
 		</profile>
