@@ -29,6 +29,8 @@ Features
 * Nagios plugin
 	* Plugin capabilities for reading overall health
 	* Can also expose sub-component health status
+	
+[![Build Status](https://travis-ci.org/betfair/tornjak.png?branch=master)](https://travis-ci.org/betfair/tornjak)
 
 Licensing
 ---------
