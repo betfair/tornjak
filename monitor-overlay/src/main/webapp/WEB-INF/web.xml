@@ -1,0 +1,53 @@
+<!--
+  ~ Copyright 2013, The Sporting Exchange Limited
+  ~
+  ~ Licensed under the Apache License, Version 2.0 (the "License");
+  ~ you may not use this file except in compliance with the License.
+  ~ You may obtain a copy of the License at
+  ~
+  ~     http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing, software
+  ~ distributed under the License is distributed on an "AS IS" BASIS,
+  ~ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  ~ See the License for the specific language governing permissions and
+  ~ limitations under the License.
+  -->
+
+<!DOCTYPE web-app PUBLIC
+ "-//Sun Microsystems, Inc.//DTD Web Application 2.3//EN"
+ "http://java.sun.com/dtd/web-app_2_3.dtd" >
+
+<web-app>
+    <display-name>Archetype Created Web Application</display-name>
+    
+    <context-param>
+        <param-name>contextAuthConfigLocation</param-name>
+        <param-value>classpath:com/betfair/monitoring/overlay/auth-default.properties</param-value>
+    </context-param>
+    
+    <security-constraint>
+        <web-resource-collection>
+            <web-resource-name>all</web-resource-name>
+            <url-pattern>/admin/*</url-pattern>
+            <http-method>GET</http-method>
+            <http-method>POST</http-method>
+            <http-method>HEAD</http-method>
+            <http-method>PUT</http-method>
+            <http-method>TRACE</http-method>
+            <http-method>CONNECT</http-method>
+            <http-method>DELETE</http-method>
+        </web-resource-collection>
+        <auth-constraint>
+            <role-name>jmxadmin</role-name>
+        </auth-constraint>
+    </security-constraint>
+
+    <login-config>
+        <auth-method>BASIC</auth-method>
+    </login-config>
+
+    <security-role>
+        <role-name>jmxadmin</role-name>
+    </security-role>
+</web-app>
