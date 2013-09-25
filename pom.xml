@@ -41,7 +41,7 @@
 		<cxf.version>2.0.5-incubator</cxf.version>
 		<commons-lang.version>2.5</commons-lang.version>
 		<jamon.version>2.4</jamon.version>
-        <statse.client.version>1.1</statse.client.version>
+        <statse.client.version>1.2-SNAPSHOT</statse.client.version>
 		<quartz.version>1.5.2</quartz.version>
         <!-- test dep versions -->
         <mockito.version>1.9.5</mockito.version>
@@ -114,7 +114,7 @@
 			<modules>
 				<module>monitor</module>
 				<module>kpi</module>
-				<module>monitoring-overlay</module>
+				<module>monitor-overlay</module>
 			</modules>
 		</profile>
 		<profile>
@@ -127,7 +127,7 @@
 			<modules>
 				<module>monitor</module>
 				<module>kpi</module>
-				<module>monitoring-overlay</module>
+				<module>monitor-overlay</module>
 				<module>nagios-scripts</module>
 			</modules>
 		</profile>
