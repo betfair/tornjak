@@ -3,7 +3,6 @@ jdk:
   - oraclejdk7
   - openjdk7
 before_install: "sudo apt-get install bc"
-install: "mvn clean install -X"
 notifications:
   email:
     recipients:
