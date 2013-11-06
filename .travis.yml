@@ -1,0 +1,11 @@
+language: java
+jdk:
+  - oraclejdk7
+  - openjdk7
+before_install: "sudo apt-get install bc"
+notifications:
+  email:
+    recipients:
+      - tornjak-dev@googlegroups.com
+    on_success: always
+    on_failure: always
