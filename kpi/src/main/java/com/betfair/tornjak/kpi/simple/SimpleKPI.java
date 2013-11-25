@@ -21,6 +21,8 @@ import com.betfair.tornjak.kpi.KPI;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static java.lang.Math.abs;
+
 /**
  * Date: 13/06/2013
  * Time: 12:15:14
@@ -44,15 +46,17 @@ public class SimpleKPI extends KPI implements SimpleKPIMBean {
 
     /**
      * Records a call timing
+     *
      * @param timeTaken time taken by the call
      */
     public void recordCall(double timeTaken) {
         calls.incrementAndGet();
-        latestCallTimes[index.getAndIncrement() % LATEST_CALL_COUNT] = timeTaken;
+        latestCallTimes[abs(index.getAndIncrement() % LATEST_CALL_COUNT)] = timeTaken;
     }
 
     /**
      * Records a failed call timing
+     *
      * @param timeTaken time taken by the call
      */
     public void recordFailure(double timeTaken) {
