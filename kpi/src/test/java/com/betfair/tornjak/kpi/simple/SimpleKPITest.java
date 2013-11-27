@@ -19,7 +19,11 @@ package com.betfair.tornjak.kpi.simple;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.lang.reflect.Field;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import static org.junit.Assert.assertEquals;
+
 /**
  * Date: 14/06/2013
  * Time: 10:50:14
@@ -53,7 +57,7 @@ public class SimpleKPITest {
 
     @Test
     public void shouldAddMoreThan20() {
-        for (int i =0; i < 50; i++) {
+        for (int i = 0; i < 50; i++) {
             kpi.recordCall(i);
         }
 
@@ -62,6 +66,19 @@ public class SimpleKPITest {
         assertEquals(39.5D, kpi.getLatestTimePerCall(), 0.00001);
     }
 
+    @Test
+    public void shouldHandleOverflow() throws NoSuchFieldException, IllegalAccessException {
+        kpi.recordCall(10);
+        final Field field = SimpleKPI.class.getDeclaredField("index");
+        field.setAccessible(true);
+        final AtomicInteger index = (AtomicInteger) field.get(kpi);
+        index.set(Integer.MAX_VALUE);
 
+        assertEquals(1, kpi.getCalls());
 
+        kpi.recordCall(1234);
+        kpi.recordCall(1234);
+
+        assertEquals(3, kpi.getCalls());
+    }
 }
