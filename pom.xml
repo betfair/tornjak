@@ -52,6 +52,53 @@
         <slf4j-log4j.version>1.5.6</slf4j-log4j.version>
 	</properties>
 
+	<organization>
+        <name>Betfair</name>
+        <url>http://www.betfair.com</url>
+    </organization>
+
+    <developers>
+        <developer>
+            <id>all</id>
+            <name>All developers</name>
+            <email>tornjak@googlegroups.com</email>
+        </developer>
+    </developers>
+
+    <licenses>
+        <license>
+            <name>The Apache Software License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <url>http://betfair.github.io/tornjak</url>
+
+    <issueManagement>
+        <system>GitHub</system>
+        <url>https://github.com/betfair/tornjak/issues</url>
+    </issueManagement>
+
+    <mailingLists>
+        <mailingList>
+            <name>tornjak user list</name>
+            <post>tornjak@googlegroups.com</post>
+            <archive>https://groups.google.com/forum/#!forum/tornjak</archive>
+        </mailingList>
+    </mailingLists>
+
+    <scm>
+        <connection>scm:git:git@github.com:betfair/tornjak.git</connection>
+        <url>https://github.com/betfair/tornjak.git</url>
+        <developerConnection>scm:git:git@github.com:betfair/tornjak</developerConnection>
+    </scm>
+
+    <ciManagement>
+        <system>Travis CI</system>
+        <url>https://travis-ci.org/betfair/tornjak</url>
+    </ciManagement>
+
     <dependencyManagement>
         <dependencies>
             <dependency>
